@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "easy-wallpaper"
+version = "1.0.0"
+description = "easy-wallpaper is a simple Python program to create wallpapers based on the generation of image patterns."
+authors = ["pedrosilva17 <pedroafsilva17@outlook.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "easy_wallpaper"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pillow = "^9.5.0"
+argparse = "^1.4.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
