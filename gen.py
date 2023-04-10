@@ -26,16 +26,12 @@ def hex_to_rgb(h):
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 
-def increment_index(counter, no_images, rand):
-    return random.randint(0, no_images-1) if rand else (counter + 1) % no_images
-
-
 def parse_arguments():
     parser = argparse.ArgumentParser(
         prog='gen.py',
         description='Create a wallpaper based on a generated pattern of images.',
         epilog='Note: When choosing the number of columns/rows, try to select divisors of the width/height respectively, to avoid excessive padding at the edges of the wallpaper.\n'
-        'For the best results, use images for the patterns with the same or similar inner padding.')
+        'For the best results, use images for the patterns with the same or similar inner padding (in case they have transparent backgrounds).')
     parser.add_argument(
         '-b', '--background', type=str, required=False, default=None,
         metavar="<filepath>",
@@ -53,9 +49,9 @@ def parse_arguments():
         default=[5, 5], nargs=2, metavar=("<rows>", "<columns>"),
         help="the number of image rows and columns added to the wallpaper, defaults to 5 rows and 5 columns")
     parser.add_argument(
-        '-of', '--offset', type=int, required=False, default=10,
-        metavar="<offset>",
-        help="additional offset (in pixels) between each image, defaults to 10.")
+        '-sp', '--spacing', type=int, required=False, default=10,
+        metavar="<spacing>",
+        help="additional spacing (in pixels) between each image, defaults to 10")
     parser.add_argument(
         '-o', '--output', type=str, required=False, default='wallpaper',
         metavar="<filepath>",
@@ -71,8 +67,24 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def resize_image(image, scale_factor):
+    new_height = int(image.height * scale_factor)
+    new_width = int(image.width * scale_factor)
+    if (new_width <= 0) or (new_height <= 0):
+        raise SystemExit(
+            "At least one of the dimensions of an image is non-positive. "
+            "Try lowering the spacing value or the number of rows/columns for the wallpaper.")
+
+    image = image.resize((new_width, new_height))
+    return image
+
+
+def increment_index(counter, no_images, rand):
+    return random.randint(0, no_images-1) if rand else (counter + 1) % no_images
+
+
 def generate_wallpaper(
-        background, size, color, rows, cols, offset, name, random_dist, rotate):
+        background, size, color, rows, cols, spacing, path, random_dist, rotate):
     if background:
         bg = Image.open(background)
         bg.convert('RGBA')
@@ -81,46 +93,41 @@ def generate_wallpaper(
     else:
         bg = Image.new('RGBA', size, hex_to_rgb(color) + (255,))
     layer = Image.new('RGBA', size, (255, 255, 255, 0))
+    tile_width, tile_height = bg.width // cols, bg.height // rows
+    width_error, height_error = bg.width / cols - tile_width, bg.height / rows - tile_height
+
     images = []
     try:
         for file in glob.glob('images/*'):
             image = Image.open(file)
             image = image.convert('RGBA')
+            scale_factor = min((tile_width - spacing) / image.width, (tile_height - spacing) / image.height)
+            image = resize_image(image, scale_factor)
             images.append(image)
     except UnidentifiedImageError as exc:
         raise SystemExit(
             "One of the files in the 'images' folder is not an image.") from exc
     if images == []:
-        raise SystemExit("The 'images' folder is empty. Place at least one in")
+        raise SystemExit(
+            "The 'images' folder is empty. Place at least one image in the folder to be used by the program.")
 
-    tile_width, tile_height = bg.width // cols, bg.height // rows
-    width_error, height_error = bg.width / cols - tile_width, bg.height / rows - tile_height
     index = -1
-
     for i in range(rows):
         for j in range(cols):
             index = increment_index(index, len(images), random_dist)
             image = images[index]
             if rotate:
                 image = image.rotate(random.randint(0, 359), expand=1)
-            new_width = tile_width - offset
-            new_height = tile_height - offset
-            if new_width < new_height:
-                new_height = int(image.height * (new_width / image.width))
-            else:
-                new_width = int(image.width * (new_height / image.height))
-            if (new_width <= 0) or (new_height <= 0):
-                raise SystemExit(
-                    "At least one of the dimensions of an image is non-positive. Try lowering the offset value or the number of rows/columns for the wallpaper.")
-
-            image = image.resize((new_width, new_height))
+                scale_factor = min((tile_width - spacing) / image.width,
+                            (tile_height - spacing) / image.height)
+                image = resize_image(image, scale_factor)
             x = j * tile_width + (tile_width - image.width) // 2
             y = i * tile_height + (tile_height - image.height) // 2
             layer.paste(image, (x, y), mask=image)
 
     bg.paste(layer, (int(width_error*cols / 2),
              int(height_error*rows / 2)), mask=layer)
-    bg.save(name + ".png")
+    bg.save(path + ".png")
 
 
 if __name__ == "__main__":
@@ -129,4 +136,4 @@ if __name__ == "__main__":
         args.background,
         args.size, args.color, args.rows_cols[0],
         args.rows_cols[1],
-        args.offset, args.output, args.rand_dist, args.rand_rot)
+        args.spacing, args.output, args.rand_dist, args.rand_rot)
