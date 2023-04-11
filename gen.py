@@ -9,7 +9,7 @@ def positive_int(i):
     i = int(i)
     if i <= 0:
         raise argparse.ArgumentTypeError(
-            "Only positive values are allowed for size and rows/columns.")
+            "Only positive integer values are allowed.")
     return i
 
 
